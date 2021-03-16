@@ -1,4 +1,6 @@
+import { NotFoundException } from '@nestjs/common';
 import { EntityRepository, Repository } from 'typeorm';
+import { User } from '../auth/user.entity';
 import { CreateTaskDTO } from './dto/create-task.dto';
 import { GetTasksFilterDto } from './dto/get-tasks-filter-dto';
 import { TaskStatus } from './task-status.enum';
@@ -24,17 +26,40 @@ export class TaskRepository extends Repository<Task> {
     }
 
     const tasks = await query.getMany();
+
+    if (!tasks.length) {
+      throw new NotFoundException(
+        `No tasks found for${search ? ' ' + search : ' '}${
+          status ? ', ' + status : ''
+        }.`,
+      );
+    }
+
     return tasks;
   }
 
-  async createTask(createTaskDTO: CreateTaskDTO): Promise<Task> {
+  async getTaskById(id: number): Promise<Task> {
+    const found = await this.findOne(id);
+
+    if (!found) {
+      throw new NotFoundException(`Task ID: ${id} not found.`);
+    }
+
+    return found;
+  }
+
+  async createTask(createTaskDTO: CreateTaskDTO, user: User): Promise<Task> {
     const { title, description } = createTaskDTO;
 
     const task = new Task();
     task.title = title;
     task.description = description;
     task.status = TaskStatus.OPEN;
+    task.user = user;
     await task.save();
+
+    // dont return the user in the task creation
+    delete task.user;
 
     return task;
   }
